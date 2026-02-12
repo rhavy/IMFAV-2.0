@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  uncao         UncaoType?
+  UserCargo     UserCargo[] // New: Link to join table
+
+  // Custom Fields
+  planId            Int?      @default(1)
+  cpf               String?
+  nascimento        DateTime?
+  telefone          String?
+  userRoles         String?   @default("CLIENTE")
+  sexo              Genero?
+  
+  // Status do Usuário
+  status            Status    @default(ATIVO)
+  motivoSaida       String?   // Para quando o status for INATIVO ou DELETADO
+  scheduledDeletion DateTime?
+
+  // Blocking fields
+  blockedAt         DateTime?
+  blockedReason     String?
+  blockedBy         User?     @relation("AdminActions", fields: [blockedByUserId], references: [id], onDelete: SetNull)
+  blockedByUserId   String?
+
+  sessions          Session[]
+  accounts          Account[]
+  groups            Group[]
+  
+  // Relação para saber quais ações este administrador realizou
+  actionsPerformed  User[]    @relation("AdminActions")
+
+  @@map("user")
+}
+
+enum Status {
+  ATIVO
+  INATIVO
+  BLOQUEADO
+  DELETADO
+}
+
+model Cargo {
+  id        String    @id @default(cuid())
+  name      CargoType
+  UserCargo UserCargo[] // New: Link to join table
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("cargo")
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String?  @default("blue-500")
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("group")
+}
+
+model UserCargo {
+  userId    String
+  cargoId   String
+  assignedAt DateTime @default(now())
+
+  user      User   @relation(fields: [userId], references: [id])
+  cargo     Cargo  @relation(fields: [cargoId], references: [id])
+
+  @@id([userId, cargoId]) // Composite primary key
+  @@map("user_cargo")
+}
+
+enum CargoType {
+  ADMIN
+  SECRETARIO
+  TESOURERIO
+  LIDER_CRIANCAS
+  LIDER_JUVENIL
+  LIDER_DIACONO
+  LIDER_MISSOES
+  LIDER_EVANGELISMO
+  LIDER_LOCAL
+  PASTOR_LOCAL
+  PASTOR_VICE_PRESIDENTE
+  PASTOR_PRESIDENTE
+}
+
+enum Genero {
+  MASCULINO
+  FEMININO
+}
+
+enum UncaoType {
+  PASTOR
+  OBREIRO
+  DIACONO
+  EVANGELISTA
+  PRESBITERO
+  MISSIONARIO
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  idToken               String?   @db.Text
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id @default(cuid())
+  identifier String
+  value      String    @db.Text
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+
+  @@map("verification")
+}
+
+model Log {
+  id             String    @id @default(cuid())
+  action         String    // Ex: "DISCIPLINA_APLICADA", "BLOQUEIO", "REABILITACAO"
+  entityType     String    @default("User")
+  entityId       String    // ID do usuário que recebeu a ação
+  oldValue       Json?
+  newValue       Json?
+  
+  // Detalhes da Disciplina no Log
+  tempoDisciplina String?  // Ex: "90 dias"
+  motivo          String?
+  observacao      String?  @db.Text
+
+  performedBy    String    // Nome ou ID de quem executou
+  performedAt    DateTime  @default(now())
+
+  @@map("log")
+}
