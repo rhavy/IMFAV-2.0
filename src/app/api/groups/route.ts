@@ -6,7 +6,7 @@ export async function GET() {
         const groups = await prisma.group.findMany({
             include: {
                 _count: {
-                    select: { users: true } // Isso preenche o campo group._count.users
+                    select: { user: true } // Isso preenche o campo group._count.user
                 }
             }
         });

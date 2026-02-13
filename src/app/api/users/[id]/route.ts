@@ -20,13 +20,36 @@ export async function GET(
 
         const adminMap = Object.fromEntries(admins.map(a => [a.id, a.name]));
 
-        // Mesclamos o nome do admin no objeto de log
-        const logsWithNames = logs.map(log => ({
-            ...log,
-            performedByName: adminMap[log.performedBy] || "Sistema/Admin"
-        }));
+        // Desserializar os campos oldValue e newValue se eles forem strings JSON
+        const processedLogs = logs.map(log => {
+            let parsedOldValue = log.oldValue;
+            let parsedNewValue = log.newValue;
+            
+            try {
+                if (typeof log.oldValue === 'string') {
+                    parsedOldValue = JSON.parse(log.oldValue);
+                }
+            } catch (e) {
+                console.warn('Falha ao desserializar oldValue:', e);
+            }
+            
+            try {
+                if (typeof log.newValue === 'string') {
+                    parsedNewValue = JSON.parse(log.newValue);
+                }
+            } catch (e) {
+                console.warn('Falha ao desserializar newValue:', e);
+            }
+            
+            return {
+                ...log,
+                oldValue: parsedOldValue,
+                newValue: parsedNewValue,
+                performedByName: adminMap[log.performedBy] || "Sistema/Admin"
+            };
+        });
 
-        return NextResponse.json(logsWithNames);
+        return NextResponse.json(processedLogs);
     } catch (error) {
         return NextResponse.json({ error: "Erro ao buscar logs" }, { status: 500 });
     }

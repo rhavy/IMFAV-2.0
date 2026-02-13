@@ -11,7 +11,11 @@ import {
     Menu,
     X,
     ChevronRight,
-    Circle
+    Circle,
+    DollarSign,
+    User,
+    Church,
+    Briefcase
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePathname } from 'next/navigation';
@@ -23,9 +27,13 @@ export default function DashboardNavbar({ children }: { children: React.ReactNod
 
     const navLinks = [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { href: '/dashboard/cargos', label: 'Cargos', icon: Briefcase },
+        { href: '/dashboard/igrejas', label: 'Igrejas', icon: Church },
         { href: '/dashboard/membros', label: 'Membros e Grupos', icon: Users },
         { href: '/dashboard/eventos', label: 'Agenda e Eventos', icon: Calendar },
+        { href: '/dashboard/categorias-eventos', label: 'Categorias de Eventos', icon: Circle },
         { href: '/dashboard/settings', label: 'Configurações', icon: Settings },
+        { href: '/dashboard/financeiro', label: 'Financeiro', icon: DollarSign },
     ];
 
     return (

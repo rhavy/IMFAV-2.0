@@ -31,9 +31,9 @@ export const auth = betterAuth({
                 type: "string",
                 required: false,
             },
-            ativo: {
-                type: "boolean",
-                defaultValue: true,
+            status: {
+                type: "string",
+                defaultValue: "ATIVO",
             },
             deletedAt: {
                 type: "date",
@@ -74,23 +74,23 @@ export const auth = betterAuth({
                                 where: { email: body.email },
                                 select: {
                                     id: true,
-                                    ativo: true,
+                                    status: true,
                                     scheduledDeletion: true
                                 }
                             });
 
-                            // Se o utilizador estiver desativado (ativo === false)
-                            if (user && user.ativo === false) {
+                            // Se o utilizador estiver desativado (status !== "ATIVO")
+                            if (user && user.status !== "ATIVO") {
                                 const agora = new Date();
 
                                 // Verifica se ainda está no Grace Period (30 dias)
                                 if (user.scheduledDeletion && user.scheduledDeletion > agora) {
-                                    // REATIVAÇÃO AUTOMÁTICA: 
+                                    // REATIVAÇÃO AUTOMÁTICA:
                                     // Limpamos os dados de suspensão para permitir o login
                                     await prisma.user.update({
                                         where: { id: user.id },
                                         data: {
-                                            ativo: true,
+                                            status: "ATIVO",
                                             deletedAt: null,
                                             scheduledDeletion: null,
                                             motivoSaida: null

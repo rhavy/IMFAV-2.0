@@ -14,7 +14,7 @@ export default function HeroBanner() {
                 className="absolute inset-0"
             >
                 <Image
-                    src="/logo.jpeg"
+                    src="/banner.jpeg"
                     alt="Ocean wave"
                     layout="fill"
                     objectFit="cover"

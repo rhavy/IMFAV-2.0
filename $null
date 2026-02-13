@@ -1,0 +1,7 @@
+Invoke-WebRequest : Referˆncia de objeto nÆo definida para uma instƒncia de um objeto.
+No linha:1 caractere:2
++ (Invoke-WebRequest -Uri http://localhost:3000 -TimeoutSec 5).StatusCo ...
++  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Invoke-WebRequest], NullReferenceException
+    + FullyQualifiedErrorId : System.NullReferenceException,Microsoft.PowerShell.Commands.InvokeWebRequestCommand
+ 

@@ -24,7 +24,7 @@ export async function POST(req: Request) {
         const updatedGroup = await prisma.group.update({
             where: { id: groupId },
             data: {
-                users: {
+                user: {
                     connect: { id: userId }
                 }
             }
@@ -59,7 +59,7 @@ export async function DELETE(req: Request) {
         const updatedGroup = await prisma.group.update({
             where: { id: groupId },
             data: {
-                users: {
+                user: {
                     disconnect: { id: userId }
                 }
             }

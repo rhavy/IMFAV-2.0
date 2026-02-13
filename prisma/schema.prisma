@@ -8,58 +8,107 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  uncao         UncaoType?
-  UserCargo     UserCargo[] // New: Link to join table
+  id                        String     @id @default(cuid())
+  name                      String
+  email                     String     @unique
+  emailVerified             Boolean    @default(false)
+  image                     String?
+  createdAt                 DateTime   @default(now())
+  updatedAt                 DateTime   @updatedAt
+  planId                    Int?       @default(1)
+  cpf                       String?
+  userRoles                 String?    @default("CLIENTE")
+  sexo                      Genero?
+  scheduledDeletion         DateTime?
+  motivoSaida               String?
+  uncao                     UncaoType?
+  telefone                  String?
+  nascimento                DateTime?
+  blockedAt                 DateTime?
+  blockedByUserId           String?
+  blockedReason             String?
+  status                    Status     @default(ATIVO)
+  uncaoVerified             Boolean    @default(false)
+  congregacao               String?
+  accounts                  Account[]
+  eventosCadastrados        Eventos[]  @relation("EventosCadastrados")
+  igrejasCriadas            Igreja[]   @relation("IgrejasCriadas")
+  sessions                  Session[]
+  blockedBy                 User?      @relation("AdminActions", fields: [blockedByUserId], references: [id])
+  actionsPerformed          User[]     @relation("AdminActions")
+  cargo                     Cargo[]    @relation("UserToCargo")
+  eventos_eventosdirigentes Eventos[]  @relation("eventosdirigentes")
+  group                     Group[]    @relation("grouptouser")
+  igreja_userigreja         Igreja[]   @relation("userigreja")
 
-  // Custom Fields
-  planId            Int?      @default(1)
-  cpf               String?
-  nascimento        DateTime?
-  telefone          String?
-  userRoles         String?   @default("CLIENTE")
-  sexo              Genero?
-  
-  // Status do Usuário
-  status            Status    @default(ATIVO)
-  motivoSaida       String?   // Para quando o status for INATIVO ou DELETADO
-  scheduledDeletion DateTime?
-
-  // Blocking fields
-  blockedAt         DateTime?
-  blockedReason     String?
-  blockedBy         User?     @relation("AdminActions", fields: [blockedByUserId], references: [id], onDelete: SetNull)
-  blockedByUserId   String?
-
-  sessions          Session[]
-  accounts          Account[]
-  groups            Group[]
-  
-  // Relação para saber quais ações este administrador realizou
-  actionsPerformed  User[]    @relation("AdminActions")
-
+  @@index([blockedByUserId], map: "user_blockedByUserId_fkey")
   @@map("user")
 }
 
-enum Status {
-  ATIVO
-  INATIVO
-  BLOQUEADO
-  DELETADO
+model Eventos {
+  id                     String          @id @default(cuid())
+  name                   String
+  descricao              String
+  tema                   String
+  origem                 String
+  dataInicio             DateTime
+  dataFim                DateTime
+  dataCadastro           DateTime        @default(now())
+  horaInicio             String
+  horaFim                String
+  libracao               String         @default("AGUARDANDO")
+  idcadastrado           String
+  categoriaId            String?
+  convidados             Convidado[]
+  cadastradoPor          User            @relation("EventosCadastrados", fields: [idcadastrado], references: [id])
+  user_eventosdirigentes User[]          @relation("eventosdirigentes")
+  categoria              CategoriaEvento? @relation(fields: [categoriaId], references: [id]) // Relação opcional com categoria
+
+  @@index([idcadastrado], map: "eventos_idcadastrado_fkey")
+  @@index([categoriaId], map: "eventos_categoriaId_fkey")
+  @@map("eventos")
+}
+
+model Igreja {
+  id              String   @id @default(cuid())
+  name            String
+  rua             String
+  numero          String
+  bairro          String
+  cidade          String
+  estado          String
+  cep             String
+  pais            String
+  criadoPorId     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  criadoPor       User     @relation("IgrejasCriadas", fields: [criadoPorId], references: [id])
+  user_userigreja User[]   @relation("userigreja")
+
+  @@index([criadoPorId], map: "igreja_criadoPorId_fkey")
+  @@map("igreja")
+}
+
+model Convidado {
+  id          String    @id @default(cuid())
+  name        String
+  uncao       UncaoType
+  funcao      String
+  aprovacao   Boolean   @default(false)
+  imagem      String?
+  eventoId    String
+  evento      Eventos   @relation(fields: [eventoId], references: [id])
+
+  @@index([eventoId], map: "convidado_eventoId_fkey")
+  @@map("convidado")
 }
 
 model Cargo {
-  id        String    @id @default(cuid())
-  name      CargoType
-  UserCargo UserCargo[] // New: Link to join table
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id        String      @id @default(cuid())
+  name      String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  user      User[]      @relation("UserToCargo")
 
   @@map("cargo")
 }
@@ -69,52 +118,11 @@ model Group {
   name        String
   description String?
   color       String?  @default("blue-500")
-  users       User[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  user        User[]   @relation("grouptouser")
 
   @@map("group")
-}
-
-model UserCargo {
-  userId    String
-  cargoId   String
-  assignedAt DateTime @default(now())
-
-  user      User   @relation(fields: [userId], references: [id])
-  cargo     Cargo  @relation(fields: [cargoId], references: [id])
-
-  @@id([userId, cargoId]) // Composite primary key
-  @@map("user_cargo")
-}
-
-enum CargoType {
-  ADMIN
-  SECRETARIO
-  TESOURERIO
-  LIDER_CRIANCAS
-  LIDER_JUVENIL
-  LIDER_DIACONO
-  LIDER_MISSOES
-  LIDER_EVANGELISMO
-  LIDER_LOCAL
-  PASTOR_LOCAL
-  PASTOR_VICE_PRESIDENTE
-  PASTOR_PRESIDENTE
-}
-
-enum Genero {
-  MASCULINO
-  FEMININO
-}
-
-enum UncaoType {
-  PASTOR
-  OBREIRO
-  DIACONO
-  EVANGELISTA
-  PRESBITERO
-  MISSIONARIO
 }
 
 model Session {
@@ -128,6 +136,7 @@ model Session {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId], map: "session_userId_fkey")
   @@map("session")
 }
 
@@ -136,7 +145,6 @@ model Account {
   accountId             String
   providerId            String
   userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken           String?   @db.Text
   refreshToken          String?   @db.Text
   idToken               String?   @db.Text
@@ -146,7 +154,9 @@ model Account {
   password              String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId], map: "account_userId_fkey")
   @@map("account")
 }
 
@@ -162,20 +172,49 @@ model Verification {
 }
 
 model Log {
-  id             String    @id @default(cuid())
-  action         String    // Ex: "DISCIPLINA_APLICADA", "BLOQUEIO", "REABILITACAO"
-  entityType     String    @default("User")
-  entityId       String    // ID do usuário que recebeu a ação
-  oldValue       Json?
-  newValue       Json?
-  
-  // Detalhes da Disciplina no Log
-  tempoDisciplina String?  // Ex: "90 dias"
+  id              String   @id @default(cuid())
+  action          String
+  entityType      String   @default("User")
+  entityId        String
+  oldValue        String?  @db.LongText
+  newValue        String?  @db.LongText
+  performedBy     String
+  performedAt     DateTime @default(now())
   motivo          String?
   observacao      String?  @db.Text
-
-  performedBy    String    // Nome ou ID de quem executou
-  performedAt    DateTime  @default(now())
+  tempoDisciplina String?
 
   @@map("log")
+}
+
+enum Status {
+  ATIVO
+  INATIVO
+  BLOQUEADO
+  DELETADO
+}
+
+enum Genero {
+  MASCULINO
+  FEMININO
+}
+
+model CategoriaEvento {
+  id          String   @id @default(cuid())
+  name        String   @unique // Nome da categoria (ex: Congresso, Culto, Conferência)
+  descricao   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  eventos     Eventos[] // Relação com eventos
+  
+  @@map("categoria_evento")
+}
+
+enum UncaoType {
+  PASTOR
+  OBREIRO
+  DIACONO
+  EVANGELISTA
+  PRESBITERO
+  MISSIONARIO
 }

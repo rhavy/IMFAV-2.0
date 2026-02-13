@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Users, Search, RotateCcw, MoreVertical,
     Edit3, Mail, Phone, Trash2, ShieldPlus,
@@ -19,14 +19,21 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import Link from 'next/link';
-import { UncaoType, Genero, CargoType } from '@prisma/client'; // Import enums
+import { UncaoType, Genero } from '@prisma/client'; // Import enums
 import { useAuth } from '@/hooks/useAuth'; // Import useAuth
 
-const formatName = (sexo: any, uncao: any, name: string) => {
+const formatName = (sexo: any, uncao: any, name: string, uncaoVerified: boolean) => {
     const titulos: { [key: string]: string } = {
         PASTOR: sexo === 'FEMININO' ? 'Pastora' : 'Pastor',
         OBREIRO: sexo === 'FEMININO' ? 'Obreira' : 'Obreiro',
@@ -35,7 +42,7 @@ const formatName = (sexo: any, uncao: any, name: string) => {
         PRESBITERO: 'Presbítero',
         MISSIONARIO: sexo === 'FEMININO' ? 'Missionária' : 'Missionário',
     };
-    const titulo = titulos[uncao] || "";
+    const titulo = (uncaoVerified ? titulos[uncao] : "") || "";
     return `${titulo} ${name}`.trim().toLowerCase();
 };
 
@@ -44,6 +51,8 @@ export default function ClienteMembrosGrupos({ groups = [], members = [], loadin
     const { user: authUser } = useAuth(); // Get authenticated user for performedByUserId
     const [selectedReason, setSelectedReason] = useState("");
     const [observation, setObservation] = useState("");
+    const [filterStatus, setFilterStatus] = useState("TODOS"); // New state for filter status
+    const [filterCongregacao, setFilterCongregacao] = useState("TODOS"); // New state for congregation filter
 
     const BLOCKING_REASONS = [
         "Comportamento Inadequado",
@@ -55,7 +64,7 @@ export default function ClienteMembrosGrupos({ groups = [], members = [], loadin
 
     // Estado único para gerenciar todos os modais de ação
     const [modalAction, setModalAction] = useState<{
-        type: 'view' | 'edit' | 'delete' | 'uncao' | 'cargo' | 'discipline' | null,
+        type: 'view' | 'edit' | 'delete' | 'uncao' | 'manage_cargos' | 'discipline' | null,
         member: any
     }>({ type: null, member: null });
 
@@ -63,6 +72,26 @@ export default function ClienteMembrosGrupos({ groups = [], members = [], loadin
         type: 'rehabilitate' | 'restore' | null,
         member: any
     }>({ type: null, member: null });
+
+    const [availableCargos, setAvailableCargos] = useState([]); // State to store all available cargos
+
+    useEffect(() => {
+        const fetchCargos = async () => {
+            try {
+                const res = await fetch('/api/cargos');
+                if (res.ok) {
+                    const data = await res.json();
+                    setAvailableCargos(data);
+                } else {
+                    toast.error("Erro ao buscar cargos disponíveis.");
+                }
+            } catch (error) {
+                console.error("Erro ao buscar cargos:", error);
+                toast.error("Erro ao buscar cargos disponíveis.");
+            }
+        };
+        fetchCargos();
+    }, []);
 
     const userNamesMap = useMemo(() => {
         const map = new Map<string, string>();
@@ -112,14 +141,34 @@ export default function ClienteMembrosGrupos({ groups = [], members = [], loadin
     };
 
     const filteredMembers = useMemo(() => {
-        if (!searchTerm) return members;
-        const lowerTerm = searchTerm.toLowerCase();
-        return members.filter((m: any) =>
-            m.name?.toLowerCase().includes(lowerTerm) ||
-            m.email?.toLowerCase().includes(lowerTerm) ||
-            m.uncao?.toLowerCase().includes(lowerTerm)
-        );
-    }, [searchTerm, members]);
+        let currentMembers = members;
+
+        // Apply search term filter
+        if (searchTerm) {
+            const lowerTerm = searchTerm.toLowerCase();
+            currentMembers = currentMembers.filter((m: any) =>
+                m.name?.toLowerCase().includes(lowerTerm) ||
+                m.email?.toLowerCase().includes(lowerTerm) ||
+                m.uncao?.toLowerCase().includes(lowerTerm)
+            );
+        }
+
+        // Apply status filter
+        if (filterStatus !== "TODOS") {
+            currentMembers = currentMembers.filter((m: any) => {
+                return m.status === filterStatus;
+            });
+        }
+
+        // Apply congregation filter
+        if (filterCongregacao !== "TODOS") {
+            currentMembers = currentMembers.filter((m: any) => {
+                return m.congregacao === filterCongregacao;
+            });
+        }
+
+        return currentMembers;
+    }, [searchTerm, members, filterStatus, filterCongregacao]);
 
     const handleWhatsAppClick = (telefone: string, nome: string) => {
         if (!telefone) {
@@ -176,6 +225,8 @@ export default function ClienteMembrosGrupos({ groups = [], members = [], loadin
                 updates[key] = new Date(value.toString()).toISOString();
             } else if (key === "uncao" || key === "sexo") {
                 updates[key] = value.toString().toUpperCase();
+            } else if (key === "congregacao") { // Handle congregacao separately to avoid toUpperCase
+                updates[key] = value.toString();
             } else {
                 updates[key] = value;
             }
@@ -365,20 +416,48 @@ export default function ClienteMembrosGrupos({ groups = [], members = [], loadin
                         <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Lista Geral</h2>
                     </div>
 
-                    <div className="relative w-full md:w-[450px] group">
-                        <Search className={`absolute left-5 top-1/2 -translate-y-1/2 transition-all duration-300 ${searchTerm ? 'text-blue-600' : 'text-slate-400'}`} size={20} />
-                        <input
-                            type="text"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            placeholder="Procurar por nome, unção ou cargo..."
-                            className="w-full pl-14 pr-12 py-4 bg-white border-2 border-slate-100 rounded-[1.5rem] text-sm font-medium focus:outline-none focus:border-blue-500/50 focus:ring-8 focus:ring-blue-500/5 transition-all shadow-inner"
-                        />
-                        {searchTerm && (
-                            <button onClick={() => setSearchTerm("")} className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 rounded-full text-slate-400">
-                                <X size={16} />
-                            </button>
-                        )}
+                    <div className="flex items-center gap-4 w-full md:w-auto">
+                        <div className="relative w-full md:w-[450px] group">
+                            <Search className={`absolute left-5 top-1/2 -translate-y-1/2 transition-all duration-300 ${searchTerm ? 'text-blue-600' : 'text-slate-400'}`} size={20} />
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="Procurar por nome, unção ou cargo..."
+                                className="w-full pl-14 pr-12 py-4 bg-white border-2 border-slate-100 rounded-[1.5rem] text-sm font-medium focus:outline-none focus:border-blue-500/50 focus:ring-8 focus:ring-blue-500/5 transition-all shadow-inner"
+                            />
+                            {searchTerm && (
+                                <button onClick={() => setSearchTerm("")} className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 rounded-full text-slate-400">
+                                    <X size={16} />
+                                </button>
+                            )}
+                        </div>
+
+                        <Select value={filterStatus} onValueChange={setFilterStatus}>
+                            <SelectTrigger className="w-full md:w-[200px] h-14 px-5 bg-white border-2 border-slate-100 rounded-[1.5rem] text-sm font-medium focus:outline-none focus:border-blue-500/50 focus:ring-8 focus:ring-blue-500/5 transition-all shadow-inner">
+                                <SelectValue placeholder="Filtrar por Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="TODOS">Todos</SelectItem>
+                                <SelectItem value="ATIVO">Ativos</SelectItem>
+                                <SelectItem value="INATIVO">Inativos (Disciplina)</SelectItem>
+                                <SelectItem value="BLOQUEADO">Bloqueados</SelectItem>
+                                <SelectItem value="DELETADO">Excluídos</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={filterCongregacao} onValueChange={setFilterCongregacao}>
+                            <SelectTrigger className="w-full md:w-[200px] h-14 px-5 bg-white border-2 border-slate-100 rounded-[1.5rem] text-sm font-medium focus:outline-none focus:border-blue-500/50 focus:ring-8 focus:ring-blue-500/5 transition-all shadow-inner">
+                                <SelectValue placeholder="Filtrar por Congregação" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="TODOS">Todas as Congregações</SelectItem>
+                                <SelectItem value="SEDE">Sede</SelectItem>
+                                <SelectItem value="VILA_VELHA">Vila Velha</SelectItem>
+                                <SelectItem value="VITORIA">Vitória</SelectItem>
+                                {/* Add more congregations as needed */}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
 
@@ -405,9 +484,10 @@ export default function ClienteMembrosGrupos({ groups = [], members = [], loadin
                                         onRestore={onRestore}
                                         onDelete={() => setModalAction({ type: 'delete', member })}
                                         onUncao={() => setModalAction({ type: 'uncao', member })}
-                                        onCargo={() => setModalAction({ type: 'cargo', member })}
+                                        onManageCargos={() => setModalAction({ type: 'manage_cargos', member })}
                                         onWhatsApp={() => handleWhatsAppClick(member.telefone, member.name)}
-                                        setConfirmationModal={setConfirmationModal} // Passar a função para MemberRow
+                                        setConfirmationModal={setConfirmationModal}
+                                        handleUpdateMember={handleUpdateMember} // Pass handleUpdateMember
                                     />
                                 ))
                             ) : (
@@ -467,11 +547,14 @@ export default function ClienteMembrosGrupos({ groups = [], members = [], loadin
                                     </h2>
                                     <div className="flex items-center gap-2 mt-2">
                                         <p className="text-blue-600 font-bold uppercase text-xs tracking-widest">
-                                            {modalAction.member.uncao || 'Membro'}
-                                        </p>
-                                        <span className="text-slate-300">|</span>
+                                            {modalAction.member.uncaoVerified ? modalAction.member.uncao : 'Membro'}
+                                        </p>                                        <span className="text-slate-300">|</span>
                                         <p className="text-slate-500 font-bold uppercase text-xs tracking-widest">
                                             {modalAction.member.cargo?.name || 'Membro'}
+                                        </p>
+                                        <span className="text-slate-300">|</span>
+                                        <p className="text-blue-500 font-bold uppercase text-xs tracking-widest">
+                                            {modalAction.member.congregacao || 'Membro'}
                                         </p>
                                     </div>
                                 </div>
@@ -633,6 +716,16 @@ export default function ClienteMembrosGrupos({ groups = [], members = [], loadin
                                         ))}
                                     </select>
                                 </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Congregação</label>
+                                    <input
+                                        name="congregacao"
+                                        type="text"
+                                        defaultValue={modalAction.member?.congregacao || ''}
+                                        className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:bg-white focus:border-blue-500/50 transition-all outline-none"
+                                        placeholder="Ex: Sede, Vila Velha"
+                                    />
+                                </div>
 
                             </div>
                             {/* Footer de Ações Fixo */}
@@ -714,7 +807,7 @@ export default function ClienteMembrosGrupos({ groups = [], members = [], loadin
                 <DialogContent className="rounded-[2.5rem] border-none p-10 max-w-sm shadow-2xl outline-none">
                     <DialogHeader>
                         <DialogTitle className="text-xl font-black uppercase text-slate-900">Alterar Unção</DialogTitle>
-                        <DialogDescription className="font-medium text-slate-500">Defina a nova função ministerial.</DialogDescription>
+                        <DialogDescription className="font-medium text-slate-500">Defina a nova unção ministerial.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-3 py-6">
                         {Object.values(UncaoType).map(uncaoOption => (
@@ -722,7 +815,7 @@ export default function ClienteMembrosGrupos({ groups = [], members = [], loadin
                                 key={uncaoOption}
                                 variant="outline"
                                 className="h-14 rounded-2xl border-slate-100 font-black text-[10px] uppercase tracking-widest hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all"
-                                onClick={() => handleUpdateMember(modalAction.member.id, { uncao: uncaoOption }, "CHANGE_UNCAO")}
+                                onClick={() => handleUpdateMember(modalAction.member.id, { uncao: uncaoOption }, "UPDATE_UNCAO")}
                             >
                                 {uncaoOption}
                             </Button>
@@ -730,24 +823,87 @@ export default function ClienteMembrosGrupos({ groups = [], members = [], loadin
                     </div>
                 </DialogContent>
             </Dialog>
-            <Dialog open={modalAction.type === 'cargo'} onOpenChange={closeModals}>
-                <DialogContent className="rounded-[2.5rem] border-none p-10 max-w-sm shadow-2xl outline-none">
+
+            {/* MODAL DE GERENCIAMENTO DE CARGOS */}
+            <Dialog open={modalAction.type === 'manage_cargos'} onOpenChange={closeModals}>
+                <DialogContent className="rounded-[2.5rem] border-none p-10 max-w-lg shadow-2xl outline-none">
                     <DialogHeader>
-                        <DialogTitle className="text-xl font-black uppercase text-slate-900">Alterar Cargo</DialogTitle>
-                        <DialogDescription className="font-medium text-slate-500">Defina a nova função ministerial.</DialogDescription>
+                        <DialogTitle className="text-xl font-black uppercase text-slate-900">Gerenciar Cargos</DialogTitle>
+                        <DialogDescription className="font-medium text-slate-500">
+                            Adicione ou remova cargos para <strong>{modalAction.member?.name}</strong>.
+                        </DialogDescription>
                     </DialogHeader>
-                    <div className="grid gap-3 py-6">
-                        {Object.values(CargoType).map(cargoOption => (
-                            <Button
-                                key={cargoOption}
-                                variant="outline"
-                                className="h-14 rounded-2xl border-slate-100 font-black text-[10px] uppercase tracking-widest hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all"
-                                onClick={() => handleUpdateMember(modalAction.member.id, { cargo: cargoOption }, "CHANGE_ROLE")}
-                            >
-                                {cargoOption}
-                            </Button>
-                        ))}
+
+                    <div className="space-y-6 py-6">
+                        {/* Cargos Atuais */}
+                        <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-2">Cargos Atribuídos</p>
+                            <div className="flex flex-wrap gap-2">
+                                {modalAction.member?.cargo?.length > 0 ? (
+                                    modalAction.member.cargo.map((c: any) => (
+                                        <div key={c.id} className="flex items-center gap-2 bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1.5 rounded-full">
+                                            <span>{c.name}</span>
+                                            <button
+                                                onClick={() => handleUpdateMember(modalAction.member.id, { cargoId: c.id }, "REMOVE_USER_CARGO")}
+                                                className="text-blue-600 hover:text-blue-900"
+                                                title="Remover Cargo"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-sm text-slate-500">Nenhum cargo atribuído.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Adicionar Novo Cargo */}
+                        <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-2">Adicionar Novo Cargo</p>
+                            <div className="flex gap-2">
+                                <Select
+                                    onValueChange={(selectedCargoId) => {
+                                        if (selectedCargoId && modalAction.member) {
+                                            handleUpdateMember(
+                                                modalAction.member.id,
+                                                { cargoId: selectedCargoId },
+                                                "ADD_USER_CARGO"
+                                            );
+                                        }
+                                    }}
+                                    value="" // Mantemos vazio para resetar após a seleção, simulando o comportamento anterior
+                                >
+                                    <SelectTrigger className="flex-1 h-auto px-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-2xl text-sm font-bold text-slate-700 focus:ring-0 focus:border-slate-300 transition-all outline-none">
+                                        <SelectValue placeholder="Selecione um cargo" />
+                                    </SelectTrigger>
+
+                                    <SelectContent>
+                                        {availableCargos
+                                            .filter((cargo: any) =>
+                                                !modalAction.member?.cargo?.some((c: any) => c.id === cargo.id)
+                                            )
+                                            .map((cargo: any) => (
+                                                <SelectItem key={cargo.id} value={cargo.id}>
+                                                    {cargo.name}
+                                                </SelectItem>
+                                            ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
                     </div>
+
+                    <DialogFooter className="pt-6 border-t border-slate-100 gap-3">
+                        <Button
+                            type="button"
+                            onClick={closeModals}
+                            variant="ghost"
+                            className="rounded-2xl font-bold text-slate-400 uppercase text-xs tracking-widest"
+                        >
+                            Fechar
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 
@@ -859,8 +1015,8 @@ function ModalInfo({ label, value }: { label: string, value: string }) {
     );
 }
 
-function MemberRow({ member, onView, onEdit, onDiscipline, onRehabilitate, onRestore, onDelete, onUncao, onCargo, onWhatsApp, setConfirmationModal }: any) {
-    const fullName = formatName(member.sexo, member.uncao, member.name);
+function MemberRow({ member, onView, onEdit, onDiscipline, onRehabilitate, onRestore, onDelete, onUncao, onManageCargos, onWhatsApp, setConfirmationModal, handleUpdateMember }: any) {
+    const fullName = formatName(member.sexo, member.uncao, member.name, member.uncaoVerified);
 
     return (
         <tr className="group bg-white hover:bg-slate-50/80 transition-all duration-300 rounded-2xl">
@@ -905,7 +1061,11 @@ function MemberRow({ member, onView, onEdit, onDiscipline, onRehabilitate, onRes
             <td className="px-10 py-6">
                 <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-slate-100 rounded-xl text-slate-500"><ShieldCheck size={18} /></div>
-                    <span className="text-xs font-black text-slate-700 uppercase tracking-tighter">{member.cargo?.name || 'Membro'}</span>
+                    <span className="text-xs font-black text-slate-700 uppercase tracking-tighter">
+                        {member.cargo && member.cargo.length > 0
+                            ? member.cargo.map((c: any) => c.name).join(', ')
+                            : 'Membro'}
+                    </span>
                 </div>
             </td>
 
@@ -943,10 +1103,14 @@ function MemberRow({ member, onView, onEdit, onDiscipline, onRehabilitate, onRes
                             <DropdownMenuItem onClick={onUncao} className={`flex gap-3 p-3 rounded-xl cursor-pointer hover:bg-slate-50 font-bold text-xs`}>
                                 <ShieldPlus size={16} className="text-blue-500" /> Alterar Unção
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator className="my-2" />
-                            <DropdownMenuItem onClick={onCargo} className={`flex gap-3 p-3 rounded-xl cursor-pointer hover:bg-slate-50 font-bold text-xs`}>
-                                <ShieldPlus size={16} className="text-blue-500" /> Alterar Cargo
+                            <DropdownMenuItem onClick={onManageCargos} className={`flex gap-3 p-3 rounded-xl cursor-pointer hover:bg-slate-50 font-bold text-xs`}>
+                                <ShieldPlus size={16} className="text-blue-500" /> Gerenciar Cargos
                             </DropdownMenuItem>
+                            {member.uncao && !member.uncaoVerified && (
+                                <DropdownMenuItem onClick={() => handleUpdateMember(member.id, { uncaoVerified: true }, "VERIFY_UNCAO")} className={`flex gap-3 p-3 rounded-xl cursor-pointer hover:bg-slate-50 font-bold text-xs`}>
+                                    <ShieldCheck size={16} className="text-emerald-500" /> Verificar Unção
+                                </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator className="my-2" />
 
                             {/* Exemplo dentro do MemberRow */}
